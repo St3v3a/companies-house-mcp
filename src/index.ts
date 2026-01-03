@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import * as z from 'zod/v4';
 import { config as loadEnv } from 'dotenv';
 import { UKCompanyAPI } from './api/uk-company-api.js';
 

@@ -2,18 +2,25 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# Copy pre-built Smithery bundle
-COPY .smithery/index.cjs ./.smithery/index.cjs
-
-# Copy package files for any runtime dependencies
+# Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production --ignore-scripts
+# Install ALL dependencies (need devDependencies for building)
+RUN npm ci
 
-# Expose the port Smithery expects
+# Copy source code
+COPY tsconfig.json ./
+COPY src ./src
+
+# Build TypeScript
+RUN npm run build
+
+# Prune dev dependencies
+RUN npm prune --production
+
+# Expose the port
 ENV PORT=3000
 EXPOSE 3000
 
-# Run the pre-built Smithery bundle
-CMD ["node", ".smithery/index.cjs"]
+# Run the HTTP server
+CMD ["node", "dist/http-server.js"]
