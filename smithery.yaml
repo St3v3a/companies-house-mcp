@@ -1,1 +1,7 @@
+# Smithery.ai configuration for TypeScript runtime
 runtime: typescript
+target: dist/index.js
+env:
+  COMPANIES_HOUSE_API_KEY:
+    required: true
+    description: "Your Companies House API key (get one free at https://developer.company-information.service.gov.uk/)"
