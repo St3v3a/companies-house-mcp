@@ -5,6 +5,21 @@ import { UKCompanyServer } from './server.js';
 
 loadEnv();
 
+interface ServerConfig {
+  apiKey: string;
+  baseUrl?: string;
+}
+
+// Smithery expects a default createServer export
+export default function createServer(config: ServerConfig) {
+  const server = new UKCompanyServer({
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl
+  });
+  return server.getInstance();
+}
+
+// For standalone CLI execution
 async function main() {
   const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
 
@@ -27,7 +42,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error('Unhandled error:', error);
-  process.exit(1);
-});
+// Only run main if executed directly (not imported)
+const isDirectRun = process.argv[1]?.includes('index');
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error('Unhandled error:', error);
+    process.exit(1);
+  });
+}

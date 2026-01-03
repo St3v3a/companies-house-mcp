@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MCP server for UK Companies House API - search companies, directors, filings, PSC",
   "main": "dist/index.js",
+  "module": "src/index.ts",
   "type": "module",
   "bin": {
     "companies-house-mcp": "./dist/index.js"
