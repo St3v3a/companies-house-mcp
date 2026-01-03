@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 
+import { z } from 'zod';
 import { config as loadEnv } from 'dotenv';
 import { UKCompanyServer } from './server.js';
 
 loadEnv();
 
-interface ServerConfig {
-  apiKey: string;
-  baseUrl?: string;
-}
+// Smithery config schema - defines what users need to provide
+export const configSchema = z.object({
+  apiKey: z.string().describe('Your Companies House API key (get one free at https://developer.company-information.service.gov.uk/)'),
+  baseUrl: z.string().optional().describe('Optional custom API base URL')
+});
+
+type ServerConfig = z.infer<typeof configSchema>;
 
 // Smithery expects a default createServer export
 export default function createServer(config: ServerConfig) {
