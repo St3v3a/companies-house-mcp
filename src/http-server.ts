@@ -16,14 +16,24 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 // Store transports by session ID
 const transports = new Map<string, StreamableHTTPServerTransport>();
 
-// Create MCP server for a session with the given API key
-function createMcpServer(apiKey: string): McpServer {
-  const api = new UKCompanyAPI({ apiKey });
+// Store API keys by session ID (set when tools are called)
+const sessionApiKeys = new Map<string, string>();
 
+// Create MCP server for a session
+function createMcpServer(getApiKey: () => string | undefined): McpServer {
   const server = new McpServer({
     name: 'uk-company-data',
     version: '1.0.0'
   });
+
+  // Helper to get API and throw if not configured
+  const getApi = (): UKCompanyAPI => {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      throw new Error('API key required. Configure apiKey in your MCP client settings.');
+    }
+    return new UKCompanyAPI({ apiKey });
+  };
 
   // Search companies
   server.registerTool('search_companies', {
@@ -34,6 +44,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().describe('Pagination start index').optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.company.searchCompanies(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -45,6 +56,7 @@ function createMcpServer(apiKey: string): McpServer {
       company_number: z.string().describe('8-character company number')
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.company.getCompanyProfile(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -58,6 +70,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.officers.getOfficers(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -72,6 +85,7 @@ function createMcpServer(apiKey: string): McpServer {
       category: z.string().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.filing.getFilingHistory(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -85,6 +99,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.psc.getPersonsWithSignificantControl(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -98,6 +113,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.charges.getCharges(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -111,6 +127,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.search.searchOfficers(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -122,6 +139,7 @@ function createMcpServer(apiKey: string): McpServer {
       company_number: z.string().describe('Company number')
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.company.getRegisteredOfficeAddress(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -141,6 +159,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.search.advancedCompanySearch(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -154,6 +173,7 @@ function createMcpServer(apiKey: string): McpServer {
       start_index: z.number().optional()
     }
   }, async (args) => {
+    const api = getApi();
     const result = await api.officers.getOfficerAppointmentsList(args);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
@@ -248,6 +268,24 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
     return;
   }
 
+  // Well-known MCP config endpoint for Smithery discovery
+  if (req.url === '/.well-known/mcp-config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      title: 'MCP Session Configuration',
+      description: 'Schema for the /mcp endpoint configuration',
+      'x-query-style': 'dot+bracket',
+      type: 'object',
+      properties: {
+        apiKey: {
+          type: 'string',
+          description: 'Your Companies House API key'
+        }
+      }
+    }));
+    return;
+  }
+
   // MCP endpoint
   if (req.url === '/mcp' || req.url === '/') {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
@@ -261,33 +299,32 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
       const bodyObj = body as Record<string, unknown>;
       console.log(`[MCP] ${req.method} request, session: ${sessionId || 'none'}, method: ${bodyObj?.method || 'N/A'}`);
 
+      // Extract API key and store it for the session
+      const apiKey = extractApiKey(req, body);
+      if (apiKey && sessionId) {
+        sessionApiKeys.set(sessionId, apiKey);
+      }
+
       if (req.method === 'POST') {
         if (sessionId && transports.has(sessionId)) {
-          // Existing session
+          // Existing session - update API key if provided
+          if (apiKey) {
+            sessionApiKeys.set(sessionId, apiKey);
+          }
           const transport = transports.get(sessionId)!;
           await transport.handleRequest(req, res, body);
         } else if (!sessionId && isInitializeRequest(body)) {
-          // New session - extract API key and create transport
-          const apiKey = extractApiKey(req, body);
-
-          if (!apiKey) {
-            console.error('[MCP] No API key provided');
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              jsonrpc: '2.0',
-              error: { code: -32001, message: 'API key required. Provide via x-mcp-config header or x-api-key header.' },
-              id: bodyObj.id
-            }));
-            return;
-          }
-
-          console.log('[MCP] Creating new session with API key');
+          // New session - allow without API key for discovery
+          console.log('[MCP] Creating new session' + (apiKey ? ' with API key' : ' without API key (discovery mode)'));
 
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (newSessionId: string) => {
               console.log(`[MCP] Session initialized: ${newSessionId}`);
               transports.set(newSessionId, transport);
+              if (apiKey) {
+                sessionApiKeys.set(newSessionId, apiKey);
+              }
             }
           });
 
@@ -296,11 +333,15 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
             if (sid) {
               console.log(`[MCP] Session closed: ${sid}`);
               transports.delete(sid);
+              sessionApiKeys.delete(sid);
             }
           };
 
-          // Create MCP server with API key
-          const mcpServer = createMcpServer(apiKey);
+          // Create MCP server - API key will be checked when tools are called
+          const mcpServer = createMcpServer(() => {
+            const sid = transport.sessionId;
+            return sid ? sessionApiKeys.get(sid) : apiKey;
+          });
           await mcpServer.connect(transport);
           await transport.handleRequest(req, res, body);
         } else {
@@ -353,7 +394,7 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[MCP] UK Company Data server listening on http://0.0.0.0:${PORT}`);
-  console.log('[MCP] Endpoints: /mcp (MCP protocol), /health (health check)');
+  console.log('[MCP] Endpoints: /mcp (MCP protocol), /health (health check), /.well-known/mcp-config (discovery)');
 });
 
 // Graceful shutdown
@@ -363,6 +404,7 @@ process.on('SIGINT', async () => {
     try {
       await transport.close();
       transports.delete(sessionId);
+      sessionApiKeys.delete(sessionId);
     } catch (e) {
       console.error(`[MCP] Error closing session ${sessionId}:`, e);
     }
