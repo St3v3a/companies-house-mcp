@@ -1,1 +1,14 @@
-runtime: typescript
+runtime: "container"
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+startCommand:
+  type: "http"
+  configSchema:
+    type: object
+    properties:
+      apiKey:
+        type: string
+        description: Your Companies House API key
+  exampleConfig:
+    apiKey: your_api_key_here
