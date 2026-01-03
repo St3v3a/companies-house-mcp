@@ -268,24 +268,6 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
     return;
   }
 
-  // Well-known MCP config endpoint for Smithery discovery
-  if (req.url === '/.well-known/mcp-config' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      title: 'MCP Session Configuration',
-      description: 'Schema for the /mcp endpoint configuration',
-      'x-query-style': 'dot+bracket',
-      type: 'object',
-      properties: {
-        apiKey: {
-          type: 'string',
-          description: 'Your Companies House API key'
-        }
-      }
-    }));
-    return;
-  }
-
   // MCP endpoint
   if (req.url === '/mcp' || req.url === '/') {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
@@ -394,7 +376,7 @@ const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[MCP] UK Company Data server listening on http://0.0.0.0:${PORT}`);
-  console.log('[MCP] Endpoints: /mcp (MCP protocol), /health (health check), /.well-known/mcp-config (discovery)');
+  console.log('[MCP] Endpoints: /mcp (MCP protocol), /health (health check)');
 });
 
 // Graceful shutdown

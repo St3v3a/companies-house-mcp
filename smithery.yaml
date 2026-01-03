@@ -4,11 +4,13 @@ build:
   dockerBuildPath: "."
 startCommand:
   type: "http"
+  path: "/mcp"
   configSchema:
     type: object
     properties:
       apiKey:
         type: string
         description: Your Companies House API key
+    required: []
   exampleConfig:
     apiKey: your_api_key_here
