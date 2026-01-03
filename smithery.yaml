@@ -1,0 +1,46 @@
+name: companies-house-mcp
+version: 1.0.0
+description: MCP server for UK Companies House API - search companies, directors, filings, PSC and more
+author: Steven Atkinson
+license: MIT
+repository: https://github.com/cybernetic1/companies-house-mcp
+homepage: https://github.com/cybernetic1/companies-house-mcp
+categories:
+  - business
+  - finance
+  - uk
+  - api
+keywords:
+  - companies-house
+  - uk-companies
+  - directors
+  - business-search
+  - company-data
+runtime: node
+main: dist/index.js
+environmentVariables:
+  COMPANIES_HOUSE_API_KEY:
+    description: Your Companies House API key
+    required: true
+    secret: true
+tools:
+  - name: search_companies
+    description: Search for UK companies by name
+  - name: get_company_profile
+    description: Get detailed profile information for a specific company
+  - name: get_officers
+    description: Get list of company officers (directors, secretaries, etc.)
+  - name: get_filing_history
+    description: Get company filing history (accounts, returns, etc.)
+  - name: get_persons_with_significant_control
+    description: Get information about persons with significant control
+  - name: get_registered_office_address
+    description: Get the registered office address for a company
+  - name: search_officers
+    description: Search for officers by name
+  - name: search_disqualified_officers
+    description: Search for disqualified officers
+  - name: get_charges
+    description: Get company charges (mortgages, debentures)
+  - name: advanced_company_search
+    description: Advanced search with filters (status, date, location)
