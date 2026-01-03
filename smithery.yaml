@@ -1,13 +1,1 @@
-# Smithery configuration - HTTP transport for hosted deployment
-startCommand:
-  type: http
-  configSchema:
-    type: object
-    required:
-      - apiKey
-    properties:
-      apiKey:
-        type: string
-        description: Your Companies House API key
-  exampleConfig:
-    apiKey: your_api_key_here
+runtime: typescript
