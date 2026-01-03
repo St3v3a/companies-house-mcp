@@ -3,8 +3,8 @@ version: 1.0.0
 description: MCP server for UK Companies House API - search companies, directors, filings, PSC and more
 author: Steven Atkinson
 license: MIT
-repository: https://github.com/cybernetic1/companies-house-mcp
-homepage: https://github.com/cybernetic1/companies-house-mcp
+repository: https://github.com/St3v3a/companies-house-mcp
+homepage: https://github.com/St3v3a/companies-house-mcp
 categories:
   - business
   - finance
