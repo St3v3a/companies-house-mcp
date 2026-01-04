@@ -181,20 +181,47 @@ function createMcpServer(getApiKey: () => string | undefined): McpServer {
   return server;
 }
 
-// Extract API key from request
+// Extract API key from request - try multiple sources
 function extractApiKey(req: express.Request): string | undefined {
+  // Log all headers for debugging
+  console.log('[MCP] Headers:', JSON.stringify(req.headers, null, 2));
+
   // Try x-mcp-config header (Smithery pattern)
   const configHeader = req.headers['x-mcp-config'];
   if (configHeader) {
     try {
-      const config = JSON.parse(Array.isArray(configHeader) ? configHeader[0] : configHeader);
-      if (config.apiKey) return config.apiKey;
-    } catch { /* ignore */ }
+      const configStr = Array.isArray(configHeader) ? configHeader[0] : configHeader;
+      console.log('[MCP] Found x-mcp-config:', configStr);
+      const config = JSON.parse(configStr);
+      if (config.apiKey) {
+        console.log('[MCP] Extracted apiKey from x-mcp-config');
+        return config.apiKey;
+      }
+    } catch (e) {
+      console.error('[MCP] Failed to parse x-mcp-config:', e);
+    }
+  }
+
+  // Try mcp-config header (alternative)
+  const mcpConfigHeader = req.headers['mcp-config'];
+  if (mcpConfigHeader) {
+    try {
+      const configStr = Array.isArray(mcpConfigHeader) ? mcpConfigHeader[0] : mcpConfigHeader;
+      console.log('[MCP] Found mcp-config:', configStr);
+      const config = JSON.parse(configStr);
+      if (config.apiKey) {
+        console.log('[MCP] Extracted apiKey from mcp-config');
+        return config.apiKey;
+      }
+    } catch (e) {
+      console.error('[MCP] Failed to parse mcp-config:', e);
+    }
   }
 
   // Try x-api-key header
   const apiKeyHeader = req.headers['x-api-key'];
   if (apiKeyHeader) {
+    console.log('[MCP] Found x-api-key header');
     return Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader;
   }
 
@@ -204,15 +231,29 @@ function extractApiKey(req: express.Request): string | undefined {
     try {
       const decoded = Buffer.from(authHeader.slice(6), 'base64').toString();
       const [username] = decoded.split(':');
-      if (username) return username;
+      if (username) {
+        console.log('[MCP] Extracted apiKey from Basic auth');
+        return username;
+      }
     } catch { /* ignore */ }
+  }
+
+  // Try Bearer token
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    if (token) {
+      console.log('[MCP] Extracted apiKey from Bearer token');
+      return token;
+    }
   }
 
   // Try environment variable
   if (process.env.COMPANIES_HOUSE_API_KEY) {
+    console.log('[MCP] Using COMPANIES_HOUSE_API_KEY env var');
     return process.env.COMPANIES_HOUSE_API_KEY;
   }
 
+  console.log('[MCP] No API key found in request');
   return undefined;
 }
 
@@ -243,6 +284,9 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Track current request's API key for tool handlers
+let currentRequestApiKey: string | undefined;
+
 // MCP POST handler
 app.post('/mcp', async (req, res) => {
   const sessionId = req.headers['mcp-session-id'] as string | undefined;
@@ -250,18 +294,24 @@ app.post('/mcp', async (req, res) => {
 
   console.log(`[MCP] POST request, session: ${sessionId || 'none'}, method: ${body?.method || 'N/A'}`);
 
-  // Extract API key
+  // Extract API key from this request
   const apiKey = extractApiKey(req);
+  currentRequestApiKey = apiKey; // Make available to tool handlers
+
+  // Store API key for session if we have both
   if (apiKey && sessionId) {
+    console.log(`[MCP] Storing API key for session: ${sessionId}`);
     sessionApiKeys.set(sessionId, apiKey);
   }
 
   try {
     if (sessionId && transports.has(sessionId)) {
-      // Existing session
+      // Existing session - always update API key if provided
       if (apiKey) {
+        console.log(`[MCP] Updating API key for existing session: ${sessionId}`);
         sessionApiKeys.set(sessionId, apiKey);
       }
+      console.log(`[MCP] Session ${sessionId} has stored API key: ${sessionApiKeys.has(sessionId)}`);
       const transport = transports.get(sessionId)!;
       await transport.handleRequest(req, res, body);
     } else if (!sessionId && isInitializeRequest(body)) {
@@ -274,6 +324,7 @@ app.post('/mcp', async (req, res) => {
           console.log(`[MCP] Session initialized: ${newSessionId}`);
           transports.set(newSessionId, transport);
           if (apiKey) {
+            console.log(`[MCP] Storing API key for new session: ${newSessionId}`);
             sessionApiKeys.set(newSessionId, apiKey);
           }
         }
@@ -288,10 +339,13 @@ app.post('/mcp', async (req, res) => {
         }
       };
 
-      // Create MCP server
+      // Create MCP server - check multiple sources for API key
       const mcpServer = createMcpServer(() => {
         const sid = transport.sessionId;
-        return sid ? sessionApiKeys.get(sid) : apiKey;
+        // Try in order: current request, session storage, initial capture
+        const key = currentRequestApiKey || (sid ? sessionApiKeys.get(sid) : undefined) || apiKey;
+        console.log(`[MCP] getApiKey called - sessionId: ${sid}, found: ${!!key}`);
+        return key;
       });
 
       await mcpServer.connect(transport);
