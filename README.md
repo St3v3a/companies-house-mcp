@@ -1,5 +1,7 @@
 # Companies House MCP Server
 
+[![smithery badge](https://smithery.ai/badge/st3v3a/companies-house-mcp)](https://smithery.ai/server/st3v3a/companies-house-mcp)
+
 Access UK company data through the [Companies House API](https://developer.company-information.service.gov.uk/api/docs/) directly in Claude and other MCP clients.
 
 ## Features
